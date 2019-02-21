@@ -17,10 +17,11 @@
  * under the License.
  */
 
-import { SavedObjectAttributes } from '../../../server/saved_objects';
-import { SavedObjectMetaData } from '../saved_objects/components/saved_object_finder';
+import { SavedObjectAttributes } from '../../../../server/saved_objects';
+import { SavedObjectMetaData } from '../../saved_objects/components/saved_object_finder';
+import { EmbeddableState } from '../types';
 import { Embeddable } from './embeddable';
-import { EmbeddableState } from './types';
+
 export interface EmbeddableInstanceConfiguration {
   id: string;
 }

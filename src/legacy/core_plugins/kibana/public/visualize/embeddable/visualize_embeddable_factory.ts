@@ -24,10 +24,7 @@ import { getVisualizeLoader } from 'ui/visualize/loader';
 import { VisualizeEmbeddable } from './visualize_embeddable';
 
 import { Legacy } from 'kibana';
-import {
-  EmbeddableInstanceConfiguration,
-  OnEmbeddableStateChanged,
-} from 'ui/embeddable/embeddable_factory';
+import { EmbeddableInstanceConfiguration, OnEmbeddableStateChanged } from 'ui/embeddable';
 import { VisTypesRegistry } from 'ui/registry/vis_types';
 import { VisualizationAttributes } from '../../../../../server/saved_objects/service/saved_objects_client';
 import { SavedVisualizations } from '../types';
