@@ -4,7 +4,7 @@
  * you may not use this file except in compliance with the Elastic License.
  */
 
-import expect from 'expect.js';
+import expect from '@kbn/expect';
 import { API_BASE_PATH, ROLLUP_INDEX_NAME } from './constants';
 
 import { registerHelpers } from './rollup.test_helpers';
@@ -16,6 +16,7 @@ export default function ({ getService }) {
   const {
     createIndexWithMappings,
     getJobPayload,
+    loadJobs,
     createJob,
     deleteJob,
     startJob,
@@ -77,9 +78,7 @@ export default function ({ getService }) {
     describe('crud', () => {
       describe('list', () => {
         it('should return an empty array when there are no jobs', async () => {
-          const { body } = await supertest
-            .get(`${API_BASE_PATH}/jobs`)
-            .expect(200);
+          const { body } = await loadJobs().expect(200);
 
           expect(body).to.eql({ jobs: [] });
         });
@@ -117,7 +116,7 @@ export default function ({ getService }) {
           const payload = getJobPayload(indexName);
           await createJob(payload);
 
-          const { body: { jobs } } = await supertest.get(`${API_BASE_PATH}/jobs`);
+          const { body: { jobs } } = await loadJobs();
           const job = jobs.find(job => job.config.id === payload.job.id);
 
           expect(job).not.be(undefined);
@@ -139,7 +138,11 @@ export default function ({ getService }) {
                   'testCreatedField': {
                     'agg': 'date_histogram',
                     'delay': '1d',
-                    'interval': '24h',
+                    // TODO: Note that we created the job with `interval`, but ES has coerced this to
+                    // `fixed_interval` based on the value we provided. Once we update the UI and
+                    // tests to no longer use the deprecated `interval` property, we can remove
+                    // this comment.
+                    'fixed_interval': '24h',
                     'time_zone': 'UTC'
                   }
                 },
@@ -193,7 +196,8 @@ export default function ({ getService }) {
           await createJob(payload);
         });
 
-        it('should delete a job that was created', async () => {
+        it('should delete a job that has been stopped', async () => {
+          await stopJob(jobId);
           const { body } = await deleteJob(jobId).expect(200);
           expect(body).to.eql({ success: true });
         });
@@ -215,7 +219,7 @@ export default function ({ getService }) {
           const payload = getJobPayload(indexName);
           await createJob(payload);
 
-          const { body: { jobs } } = await supertest.get(`${API_BASE_PATH}/jobs`);
+          const { body: { jobs } } = await loadJobs();
           job = jobs.find(job => job.config.id === payload.job.id);
         });
 
@@ -228,36 +232,44 @@ export default function ({ getService }) {
 
           // Fetch the job to make sure it has been started
           const jobId = job.config.id;
-          const { body: { jobs } } = await supertest.get(`${API_BASE_PATH}/jobs`);
+          const { body: { jobs } } = await loadJobs();
           job = jobs.find(job => job.config.id === jobId);
           expect(job.status.job_state).to.eql('started');
         });
 
-        it('should throw a 400 Bad request if the job is already started', async () => {
+        it('should return 200 if the job is already started', async () => {
           await startJob(job.config.id); // Start the job
-
-          const { body } = await startJob(job.config.id).expect(400);
-          expect(body.error).to.eql('Bad Request');
-          expect(body.message).to.contain('Cannot start task for Rollup Job');
+          await startJob(job.config.id).expect(200);
         });
       });
 
       describe('stop', () => {
-        it('should stop the job', async () => {
+        let job;
+
+        beforeEach(async () => {
           const indexName = await createIndexWithMappings();
           const payload = getJobPayload(indexName);
-          const { id: jobId } = payload.job;
-
           await createJob(payload);
-          await startJob(jobId);
-          const { body } = await stopJob(jobId).expect(200);
+
+          const { body: { jobs } } = await loadJobs();
+          job = jobs.find(job => job.config.id === payload.job.id);
+        });
+
+        it('should stop the job', async () => {
+          await startJob(job.config.id);
+          const { body } = await stopJob(job.config.id).expect(200);
 
           expect(body).to.eql({ success: true });
 
           // Fetch the job to make sure it has been stopped
-          const { body: { jobs } } = await supertest.get(`${API_BASE_PATH}/jobs`);
-          const job = jobs.find(job => job.config.id === jobId);
+          const jobId = job.config.id;
+          const { body: { jobs } } = await loadJobs();
+          job = jobs.find(job => job.config.id === jobId);
           expect(job.status.job_state).to.eql('stopped');
+        });
+
+        it('should return 200 if the job is already stopped', async () => {
+          await stopJob(job.config.id).expect(200);
         });
       });
     });

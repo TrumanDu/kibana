@@ -8,15 +8,19 @@ import { EuiButtonEmpty, EuiInMemoryTable, EuiToolTip } from '@elastic/eui';
 import { InjectedIntl, injectI18n } from '@kbn/i18n/react';
 import { last } from 'lodash';
 import React from 'react';
-import { InfraNodeType } from '../../../server/lib/adapters/nodes';
 import { createWaffleMapNode } from '../../containers/waffle/nodes_to_wafflemap';
-import { InfraNode, InfraNodePath, InfraTimerangeInput } from '../../graphql/types';
+import {
+  InfraSnapshotNode,
+  InfraSnapshotNodePath,
+  InfraTimerangeInput,
+  InfraNodeType,
+} from '../../graphql/types';
 import { InfraWaffleMapNode, InfraWaffleMapOptions } from '../../lib/lib';
 import { fieldToName } from '../waffle/lib/field_to_display_name';
 import { NodeContextMenu } from '../waffle/node_context_menu';
 
 interface Props {
-  nodes: InfraNode[];
+  nodes: InfraSnapshotNode[];
   nodeType: InfraNodeType;
   options: InfraWaffleMapOptions;
   formatter: (subject: string | number) => string;
@@ -31,7 +35,7 @@ const initialState = {
 
 type State = Readonly<typeof initialState>;
 
-const getGroupPaths = (path: InfraNodePath[]) => {
+const getGroupPaths = (path: InfraSnapshotNodePath[]) => {
   switch (path.length) {
     case 3:
       return path.slice(0, 2);
@@ -57,20 +61,26 @@ export const TableView = injectI18n(
           sortable: true,
           truncateText: true,
           textOnly: true,
-          render: (value: string, item: { node: InfraWaffleMapNode }) => (
-            <NodeContextMenu
-              node={item.node}
-              nodeType={nodeType}
-              closePopover={this.closePopoverFor(item.node.pathId)}
-              timeRange={timeRange}
-              isPopoverOpen={this.state.isPopoverOpen.includes(item.node.pathId)}
-              options={options}
-            >
-              <EuiButtonEmpty onClick={this.openPopoverFor(item.node.pathId)}>
-                {value}
-              </EuiButtonEmpty>
-            </NodeContextMenu>
-          ),
+          render: (value: string, item: { node: InfraWaffleMapNode }) => {
+            const tooltipText = item.node.id === value ? `${value}` : `${value} (${item.node.id})`;
+            return (
+              <NodeContextMenu
+                node={item.node}
+                nodeType={nodeType}
+                closePopover={this.closePopoverFor(item.node.pathId)}
+                timeRange={timeRange}
+                isPopoverOpen={this.state.isPopoverOpen.includes(item.node.pathId)}
+                options={options}
+                popoverPosition="rightCenter"
+              >
+                <EuiToolTip content={tooltipText}>
+                  <EuiButtonEmpty onClick={this.openPopoverFor(item.node.pathId)}>
+                    {value}
+                  </EuiButtonEmpty>
+                </EuiToolTip>
+              </NodeContextMenu>
+            );
+          },
         },
         ...options.groupBy.map((grouping, index) => ({
           field: `group_${index}`,

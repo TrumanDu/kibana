@@ -5,8 +5,9 @@
  */
 
 import _ from 'lodash';
-import { parseString } from 'xml2js';
+import { parseXmlString } from '../../../../../common/parse_xml_string';
 import fetch from 'node-fetch';
+import { parse, format } from 'url';
 
 export class WmsClient {
   constructor({ serviceUrl }) {
@@ -17,23 +18,65 @@ export class WmsClient {
     return fetch(url);
   }
 
+  _createUrl(defaultQueryParams) {
+    const serviceUrl = parse(this._serviceUrl, true);
+    const queryParams = {
+      ...serviceUrl.query,
+      ...defaultQueryParams
+    };
+    return format({
+      protocol: serviceUrl.protocol,
+      hostname: serviceUrl.hostname,
+      port: serviceUrl.port,
+      pathname: serviceUrl.pathname,
+      query: queryParams
+    });
+  }
+
+  getUrlTemplate(layers, styles) {
+    const urlTemplate = this._createUrl({
+      format: 'image/png',
+      service: 'WMS',
+      version: '1.1.1',
+      request: 'GetMap',
+      srs: 'EPSG:3857',
+      transparent: 'true',
+      width: '256',
+      height: '256',
+      layers,
+      styles
+    });
+    //TODO Find a better way to avoid URL encoding the template braces
+    return `${urlTemplate}&bbox={bbox-epsg-3857}`;
+  }
+
+  /**
+   * Extend any query parameters supplied in the URL but override with required defaults
+   * (ex. service must be WMS)
+   */
   async _fetchCapabilities() {
-    const resp = await this._fetch(`${this._serviceUrl}?version=1.1.1&request=GetCapabilities&service=WMS`);
+    const getCapabilitiesUrl = parse(this._serviceUrl, true);
+    const queryParams = {
+      ...getCapabilitiesUrl.query,
+      ...{
+        version: '1.1.1',
+        request: 'GetCapabilities',
+        service: 'WMS'
+      }
+    };
+    const resp = await this._fetch(format({
+      protocol: getCapabilitiesUrl.protocol,
+      hostname: getCapabilitiesUrl.hostname,
+      port: getCapabilitiesUrl.port,
+      pathname: getCapabilitiesUrl.pathname,
+      query: queryParams
+    }));
     if (resp.status >= 400) {
       throw new Error(`Unable to access ${this.state.serviceUrl}`);
     }
     const body = await resp.text();
 
-    const parsePromise = new Promise((resolve, reject) => {
-      parseString(body, (error, result) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(result);
-        }
-      });
-    });
-    return await parsePromise;
+    return await parseXmlString(body);
   }
 
   async getCapabilities() {
@@ -95,6 +138,13 @@ function groupCapabilities(list) {
     return [];
   }
 
+  let maxPathDepth = 0;
+  list.forEach(({ path }) => {
+    if (path.length > maxPathDepth) {
+      maxPathDepth = path.length;
+    }
+  });
+
   let rootCommonPath = list[0].path;
   for(let listIndex = 1; listIndex < list.length; listIndex++) {
     if (rootCommonPath.length === 0) {
@@ -112,16 +162,37 @@ function groupCapabilities(list) {
     }
   }
 
-  if (rootCommonPath.length === 0 || list.length === 1) {
-    return list.map(({ path, value }) => {
-      return { label: path.join(' - '), value };
-    });
+  const labelMap = new Map();
+  const options = list.map(({ path, value }) => {
+    const title = path[path.length - 1];
+    const hierachyWithTitle = rootCommonPath.length === path.length
+      ? title // entire path is common, only use title
+      : path.splice(rootCommonPath.length).join(' - ');
+    const label = title === value
+      ? hierachyWithTitle
+      : `${hierachyWithTitle} (${value})`;
+
+    // labels are used as keys in react elements so uniqueness must be guaranteed
+    let uniqueLabel;
+    if (labelMap.has(label)) {
+      const counter = labelMap.get(label);
+      const nextCounter = counter + 1;
+      labelMap.set(label, nextCounter);
+      uniqueLabel = `${label}:${nextCounter}`;
+    } else {
+      labelMap.set(label, 0);
+      uniqueLabel = label;
+    }
+    return { label: uniqueLabel, value };
+  });
+
+  // no common path or all at same depth path
+  if (rootCommonPath.length === 0 || rootCommonPath.length === maxPathDepth) {
+    return options;
   }
 
   return [{
     label: rootCommonPath.join(' - '),
-    options: list.map(({ path, value }) => {
-      return { label: path.splice(rootCommonPath.length).join(' - '), value };
-    })
+    options
   }];
 }

@@ -16,42 +16,31 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import { InternalCoreSetup, InternalCoreStart } from '../../../../core/public';
 
-import { BasePathStart } from '../../../../core/public/base_path';
-import { ChromeStart } from '../../../../core/public/chrome';
-import { FatalErrorsStart } from '../../../../core/public/fatal_errors';
-import { HttpStart } from '../../../../core/public/http';
-import { I18nStart } from '../../../../core/public/i18n';
-import { InjectedMetadataStart } from '../../../../core/public/injected_metadata';
-import { NotificationsStart } from '../../../../core/public/notifications';
-import { UiSettingsClient } from '../../../../core/public/ui_settings';
-
-interface CoreStart {
-  i18n: I18nStart;
-  injectedMetadata: InjectedMetadataStart;
-  fatalErrors: FatalErrorsStart;
-  notifications: NotificationsStart;
-  http: HttpStart;
-  basePath: BasePathStart;
-  uiSettings: UiSettingsClient;
-  chrome: ChromeStart;
-}
-
-const runtimeContext = {
-  start: {
-    core: null as CoreStart | null,
-    plugins: {},
-  },
+export const npSetup = {
+  core: (null as unknown) as InternalCoreSetup,
+  plugins: {} as Record<string, unknown>,
 };
 
-export function __newPlatformInit__(core: CoreStart) {
-  if (runtimeContext.start.core) {
-    throw new Error('New platform core api was already initialized');
-  }
+export const npStart = {
+  core: (null as unknown) as InternalCoreStart,
+  plugins: {} as Record<string, unknown>,
+};
 
-  runtimeContext.start.core = core;
+/**
+ * Only used by unit tests
+ * @internal
+ */
+export function __reset__() {
+  npSetup.core = (null as unknown) as InternalCoreSetup;
+  npStart.core = (null as unknown) as InternalCoreStart;
 }
 
-export function getNewPlatform() {
-  return runtimeContext;
+export function __setup__(coreSetup: InternalCoreSetup) {
+  npSetup.core = coreSetup;
+}
+
+export function __start__(coreStart: InternalCoreStart) {
+  npStart.core = coreStart;
 }

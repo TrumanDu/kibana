@@ -75,19 +75,11 @@ export function registerJobsRoute(server) {
     handler: async (request) => {
       try {
         const { jobIds } = request.payload;
+
         const callWithRequest = callWithRequestFactory(server, request);
         return await Promise.all(jobIds.map(id => callWithRequest('rollup.startJob', { id })))
           .then(() => ({ success: true }));
       } catch(err) {
-        // There is an issue opened on ES to handle the following error correctly
-        // https://github.com/elastic/elasticsearch/issues/39845
-        // Until then we'll modify the response here.
-        if (err.message.includes('Cannot start task for Rollup Job')) {
-          err.status = 400;
-          err.statusCode = 400;
-          err.body.error.status = 400;
-          err.displayName = 'Bad request';
-        }
 
         if (isEsError(err)) {
           return wrapEsError(err);
@@ -107,9 +99,17 @@ export function registerJobsRoute(server) {
     handler: async (request) => {
       try {
         const { jobIds } = request.payload;
+        // For our API integration tests we need to wait for the jobs to be stopped
+        // in order to be able to delete them sequencially.
+        const { waitForCompletion } = request.query;
         const callWithRequest = callWithRequestFactory(server, request);
-        return await Promise.all(jobIds.map(id => callWithRequest('rollup.stopJob', { id })))
+
+        const stopRollupJob = id => callWithRequest('rollup.stopJob', { id, waitForCompletion: waitForCompletion === 'true' });
+
+        return await Promise
+          .all(jobIds.map(stopRollupJob))
           .then(() => ({ success: true }));
+
       } catch(err) {
         if (isEsError(err)) {
           return wrapEsError(err);
@@ -129,12 +129,13 @@ export function registerJobsRoute(server) {
     handler: async (request) => {
       try {
         const { jobIds } = request.payload;
+
         const callWithRequest = callWithRequestFactory(server, request);
         return await Promise.all(jobIds.map(id => callWithRequest('rollup.deleteJob', { id })))
           .then(() => ({ success: true }));
       } catch(err) {
         // There is an issue opened on ES to handle the following error correctly
-        // https://github.com/elastic/elasticsearch/issues/39845
+        // https://github.com/elastic/elasticsearch/issues/42908
         // Until then we'll modify the response here.
         if (err.response && err.response.includes('Job must be [STOPPED] before deletion')) {
           err.status = 400;

@@ -131,6 +131,14 @@ export const schema = Joi.object()
 
     updateBaselines: Joi.boolean().default(false),
 
+    browser: Joi.object()
+      .keys({
+        type: Joi.string()
+          .valid('chrome', 'firefox')
+          .default('chrome'),
+      })
+      .default(),
+
     junit: Joi.object()
       .keys({
         enabled: Joi.boolean().default(!!process.env.CI),
@@ -166,6 +174,7 @@ export const schema = Joi.object()
         license: Joi.string().default('oss'),
         from: Joi.string().default('snapshot'),
         serverArgs: Joi.array(),
+        serverEnvVars: Joi.object(),
         dataArchive: Joi.string(),
       })
       .default(),
@@ -217,6 +226,13 @@ export const schema = Joi.object()
     screenshots: Joi.object()
       .keys({
         directory: Joi.string().default(defaultRelativeToConfigPath('screenshots')),
+      })
+      .default(),
+
+    // settings for the snapshots module
+    snapshots: Joi.object()
+      .keys({
+        directory: Joi.string().default(defaultRelativeToConfigPath('snapshots')),
       })
       .default(),
 

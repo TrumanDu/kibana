@@ -3,27 +3,28 @@
  * or more contributor license agreements. Licensed under the Elastic License;
  * you may not use this file except in compliance with the Elastic License.
  */
+jest.mock('ui/kfetch', () => ({
+  kfetch: () => Promise.resolve([]),
+}));
+import '../../../__mocks__/ui_capabilities';
 import React from 'react';
 import { mountWithIntl, shallowWithIntl } from 'test_utils/enzyme_helpers';
-import { UserProfileProvider } from '../../../../../xpack_main/public/services/user_profile';
 import { SpaceAvatar } from '../../../components';
 import { SpacesManager } from '../../../lib';
 import { SpacesNavState } from '../../nav_control';
 import { SpacesGridPage } from './spaces_grid_page';
 
-const buildUserProfile = (canManageSpaces: boolean) => {
-  return UserProfileProvider({ manageSpaces: canManageSpaces });
-};
-
 const spaces = [
   {
     id: 'default',
     name: 'Default',
+    disabledFeatures: [],
     _reserved: true,
   },
   {
     id: 'custom-1',
     name: 'Custom 1',
+    disabledFeatures: [],
   },
   {
     id: 'custom-2',
@@ -31,6 +32,7 @@ const spaces = [
     initials: 'LG',
     color: '#ABCDEF',
     description: 'my description here',
+    disabledFeatures: [],
   },
 ];
 
@@ -58,7 +60,6 @@ describe('SpacesGridPage', () => {
         <SpacesGridPage.WrappedComponent
           spacesManager={spacesManager}
           spacesNavState={spacesNavState}
-          userProfile={buildUserProfile(true)}
           intl={null as any}
         />
       )
@@ -70,7 +71,6 @@ describe('SpacesGridPage', () => {
       <SpacesGridPage.WrappedComponent
         spacesManager={spacesManager}
         spacesNavState={spacesNavState}
-        userProfile={buildUserProfile(true)}
         intl={null as any}
       />
     );

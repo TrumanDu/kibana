@@ -1,5 +1,5 @@
 <div class="app-container">
-  <kbn-top-nav name="{{ monitoringMain.name }}-nav">
+  <kbn-top-nav name="{{ monitoringMain.name }}-nav" config="topNavMenu">
     <!-- Transcluded elements. -->
     <div data-transclude-slots>
       <!-- Tabs -->
@@ -205,24 +205,10 @@
           >
           </a>
           <div
-            ng-if="monitoringMain.pipelineVersions"
-            class="euiFlexGroup euiFlexGroup--gutterMedium"
-          >
-            <h1 class="kuiTitle euiFlexItem">{{ monitoringMain.pipelineId }}</h1>
-            <select
-              ng-model="monitoringMain.pipelineHash"
-              class="kuiSelect euiFlexItem"
-              ng-change="monitoringMain.onChangePipelineHash()"
-            >
-              <option
-                ng-repeat="version in monitoringMain.pipelineVersions"
-                ng-value="version.hash"
-                i18n-id="xpack.monitoring.logstashNavigation.pipelineVersionDescription"
-                i18n-default-message="Version active {relativeLastSeen} and first seen {relativeFirstSeen}"
-                i18n-values="{relativeLastSeen: version.relativeLastSeen, relativeFirstSeen: version.relativeFirstSeen}"
-              >
-              </option>
-            </select>
+            class="kuiLocalTab"
+            ng-if="monitoringMain.pipelineVersions.length"
+            id="dropdown-elm"
+            ng-init="monitoringMain.dropdownLoadedHandler()">
           </div>
         </div>
 

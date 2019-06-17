@@ -105,6 +105,108 @@ export const elasticsearchJsPlugin = (Client, config, components) => {
     method: 'POST'
   });
 
+  // Currently the endpoint uses a default size of 100 unless a size is supplied.
+  // So until paging is supported in the UI, explicitly supply a size of 1000
+  // to match the max number of docs that the endpoint can return.
+  ml.getDataFrameTransforms = ca({
+    urls: [
+      {
+        fmt: '/_data_frame/transforms/_all?size=1000',
+      }
+    ],
+    method: 'GET'
+  });
+
+  ml.getDataFrameTransformsStats = ca({
+    urls: [
+      {
+        fmt: '/_data_frame/transforms/<%=jobId%>/_stats',
+        req: {
+          jobId: {
+            type: 'string'
+          }
+        }
+      },
+      {
+        // Currently the endpoint uses a default size of 100 unless a size is supplied.
+        // So until paging is supported in the UI, explicitly supply a size of 1000
+        // to match the max number of docs that the endpoint can return.
+        fmt: '/_data_frame/transforms/_all/_stats?size=1000',
+      }
+    ],
+    method: 'GET'
+  });
+
+  ml.createDataFrameTransformsJob = ca({
+    urls: [
+      {
+        fmt: '/_data_frame/transforms/<%=jobId%>',
+        req: {
+          jobId: {
+            type: 'string'
+          }
+        }
+      }
+    ],
+    needBody: true,
+    method: 'PUT'
+  });
+
+  ml.deleteDataFrameTransformsJob = ca({
+    urls: [
+      {
+        fmt: '/_data_frame/transforms/<%=jobId%>',
+        req: {
+          jobId: {
+            type: 'string'
+          }
+        }
+      }
+    ],
+    method: 'DELETE'
+  });
+
+  ml.getDataFrameTransformsPreview = ca({
+    urls: [
+      {
+        fmt: '/_data_frame/transforms/_preview'
+      }
+    ],
+    needBody: true,
+    method: 'POST'
+  });
+
+  ml.startDataFrameTransformsJob = ca({
+    urls: [
+      {
+        fmt: '/_data_frame/transforms/<%=jobId%>/_start',
+        req: {
+          jobId: {
+            type: 'string'
+          }
+        }
+      }
+    ],
+    method: 'POST'
+  });
+
+  ml.stopDataFrameTransformsJob = ca({
+    urls: [
+      {
+        fmt: '/_data_frame/transforms/<%=jobId%>/_stop?&force=<%=force%>',
+        req: {
+          jobId: {
+            type: 'string'
+          },
+          force: {
+            type: 'boolean'
+          }
+        }
+      }
+    ],
+    method: 'POST'
+  });
+
   ml.deleteJob = ca({
     urls: [
       {

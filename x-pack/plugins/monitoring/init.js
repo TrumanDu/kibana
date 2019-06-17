@@ -4,6 +4,7 @@
  * you may not use this file except in compliance with the Elastic License.
  */
 
+import { i18n } from '@kbn/i18n';
 import { LOGGING_TAG, KIBANA_MONITORING_LOGGING_TAG } from './common/constants';
 import { requireUIRoutes } from './server/routes';
 import { instantiateClient } from './server/es_client/instantiate_client';
@@ -14,6 +15,7 @@ import {
   getOpsStatsCollector,
   getSettingsCollector,
 } from './server/kibana_monitoring/collectors';
+import { initInfraSource } from './server/lib/logs/init_infra_source';
 
 /**
  * Initialize the Kibana Monitoring plugin by starting up asynchronous server tasks
@@ -54,6 +56,30 @@ export const init = (monitoringPlugin, server) => {
     }
   });
 
+  xpackMainPlugin.registerFeature({
+    id: 'monitoring',
+    name: i18n.translate('xpack.monitoring.featureRegistry.monitoringFeatureName', {
+      defaultMessage: 'Stack Monitoring',
+    }),
+    icon: 'monitoringApp',
+    navLinkId: 'monitoring',
+    app: ['monitoring', 'kibana'],
+    catalogue: ['monitoring'],
+    privileges: {},
+    reserved: {
+      privilege: {
+        savedObject: {
+          all: [],
+          read: []
+        },
+        ui: [],
+      },
+      description: i18n.translate('xpack.monitoring.feature.reserved.description', {
+        defaultMessage: 'To grant users access, you should also assign the monitoring_user role.'
+      })
+    }
+  });
+
   const bulkUploader = initBulkUploader(kbnServer, server);
   const kibanaCollectionEnabled = config.get('xpack.monitoring.kibana.collection.enabled');
   const { info: xpackMainInfo } = xpackMainPlugin;
@@ -90,4 +116,8 @@ export const init = (monitoringPlugin, server) => {
       showCgroupMetricsLogstash: config.get('xpack.monitoring.ui.container.logstash.enabled') // Note, not currently used, but see https://github.com/elastic/x-pack-kibana/issues/1559 part 2
     };
   });
+};
+
+export const postInit = server => {
+  initInfraSource(server);
 };

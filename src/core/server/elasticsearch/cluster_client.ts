@@ -31,6 +31,8 @@ import { ScopedClusterClient } from './scoped_cluster_client';
 /**
  * The set of options that defines how API call should be made and result be
  * processed.
+ *
+ * @public
  */
 export interface CallAPIOptions {
   /**
@@ -40,6 +42,10 @@ export interface CallAPIOptions {
    * then `Basic realm="Authorization Required"` is used as `WWW-Authenticate`.
    */
   wrap401Errors: boolean;
+  /**
+   * A signal object that allows you to abort the request via an AbortController object.
+   */
+  signal?: AbortSignal;
 }
 
 /**
@@ -55,7 +61,7 @@ async function callAPI(
   endpoint: string,
   clientParams: Record<string, unknown> = {},
   options: CallAPIOptions = { wrap401Errors: true }
-) {
+): Promise<any> {
   const clientPath = endpoint.split('.');
   const api: any = get(client, clientPath);
   if (!api) {
@@ -64,7 +70,16 @@ async function callAPI(
 
   const apiContext = clientPath.length === 1 ? client : get(client, clientPath.slice(0, -1));
   try {
-    return await api.call(apiContext, clientParams);
+    return await new Promise((resolve, reject) => {
+      const request = api.call(apiContext, clientParams);
+      if (options.signal) {
+        options.signal.addEventListener('abort', () => {
+          request.abort();
+          reject(new Error('Request was aborted'));
+        });
+      }
+      return request.then(resolve, reject);
+    });
   } catch (err) {
     if (!options.wrap401Errors || err.statusCode !== 401) {
       throw err;
@@ -84,6 +99,8 @@ async function callAPI(
  * Represents an Elasticsearch cluster API client and allows to call API on behalf
  * of the internal Kibana user and the actual user that is derived from the request
  * headers (via `asScoped(...)`).
+ *
+ * @public
  */
 export class ClusterClient {
   /**
@@ -107,11 +124,11 @@ export class ClusterClient {
   }
 
   /**
-   * Calls specified {@param endpoint} with provided {@param clientParams} on behalf of the
+   * Calls specified endpoint with provided clientParams on behalf of the
    * Kibana internal user.
-   * @param endpoint String descriptor of the endpoint e.g. `cluster.getSettings` or `ping`.
-   * @param clientParams A dictionary of parameters that will be passed directly to the Elasticsearch JS client.
-   * @param options Options that affect the way we call the API and process the result.
+   * @param endpoint - String descriptor of the endpoint e.g. `cluster.getSettings` or `ping`.
+   * @param clientParams - A dictionary of parameters that will be passed directly to the Elasticsearch JS client.
+   * @param options - Options that affect the way we call the API and process the result.
    */
   public callAsInternalUser = async (
     endpoint: string,
@@ -143,10 +160,10 @@ export class ClusterClient {
   /**
    * Creates an instance of `ScopedClusterClient` based on the configuration the
    * current cluster client that exposes additional `callAsCurrentUser` method
-   * scoped to the provided {@param req}. Consumers shouldn't worry about closing
+   * scoped to the provided req. Consumers shouldn't worry about closing
    * scoped client instances, these will be automatically closed as soon as the
    * original cluster client isn't needed anymore and closed.
-   * @param req Request the `ScopedClusterClient` instance will be scoped to.
+   * @param req - Request the `ScopedClusterClient` instance will be scoped to.
    */
   public asScoped(req: { headers?: Headers } = {}) {
     // It'd have been quite expensive to create and configure client for every incoming
@@ -172,11 +189,11 @@ export class ClusterClient {
   }
 
   /**
-   * Calls specified {@param endpoint} with provided {@param clientParams} on behalf of the
+   * Calls specified endpoint with provided clientParams on behalf of the
    * user initiated request to the Kibana server (via HTTP request headers).
-   * @param endpoint String descriptor of the endpoint e.g. `cluster.getSettings` or `ping`.
-   * @param clientParams A dictionary of parameters that will be passed directly to the Elasticsearch JS client.
-   * @param options Options that affect the way we call the API and process the result.
+   * @param endpoint - String descriptor of the endpoint e.g. `cluster.getSettings` or `ping`.
+   * @param clientParams - A dictionary of parameters that will be passed directly to the Elasticsearch JS client.
+   * @param options - Options that affect the way we call the API and process the result.
    */
   private callAsCurrentUser = async (
     endpoint: string,

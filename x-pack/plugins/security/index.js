@@ -8,8 +8,10 @@ import { resolve } from 'path';
 import { getUserProvider } from './server/lib/get_user';
 import { initAuthenticateApi } from './server/routes/api/v1/authenticate';
 import { initUsersApi } from './server/routes/api/v1/users';
-import { initPublicRolesApi } from './server/routes/api/public/roles';
+import { initExternalRolesApi } from './server/routes/api/external/roles';
+import { initPrivilegesApi } from './server/routes/api/external/privileges';
 import { initIndicesApi } from './server/routes/api/v1/indices';
+import { initOverwrittenSessionView } from './server/routes/views/overwritten_session';
 import { initLoginView } from './server/routes/views/login';
 import { initLogoutView } from './server/routes/views/logout';
 import { initLoggedOutView } from './server/routes/views/logged_out';
@@ -19,10 +21,18 @@ import { checkLicense } from './server/lib/check_license';
 import { initAuthenticator } from './server/lib/authentication/authenticator';
 import { SecurityAuditLogger } from './server/lib/audit_logger';
 import { AuditLogger } from '../../server/lib/audit_logger';
-import { createAuthorizationService, registerPrivilegesWithCluster } from './server/lib/authorization';
+import {
+  createAuthorizationService,
+  disableUICapabilitesFactory,
+  initAPIAuthorization,
+  initAppAuthorization,
+  registerPrivilegesWithCluster,
+  validateFeaturePrivileges
+} from './server/lib/authorization';
 import { watchStatusAndLicenseToInitialize } from '../../server/lib/watch_status_and_license_to_initialize';
 import { SecureSavedObjectsClientWrapper } from './server/lib/saved_objects_client/secure_saved_objects_client_wrapper';
 import { deepFreeze } from './server/lib/deep_freeze';
+import { createOptionalPlugin } from './server/lib/optional_plugin';
 
 export const security = (kibana) => new kibana.Plugin({
   id: 'security',
@@ -31,18 +41,23 @@ export const security = (kibana) => new kibana.Plugin({
   require: ['kibana', 'elasticsearch', 'xpack_main'],
 
   config(Joi) {
+    const providerOptionsSchema = (providerName, schema) => Joi.any()
+      .when('providers', {
+        is: Joi.array().items(Joi.string().valid(providerName).required(), Joi.string()),
+        then: schema,
+        otherwise: Joi.any().forbidden(),
+      });
+
     return Joi.object({
-      authProviders: Joi.array().items(Joi.string()).default(['basic']),
       enabled: Joi.boolean().default(true),
       cookieName: Joi.string().default('sid'),
-      encryptionKey: Joi.string(),
+      encryptionKey: Joi.when(Joi.ref('$dist'), {
+        is: true,
+        then: Joi.string(),
+        otherwise: Joi.string().default('a'.repeat(32)),
+      }),
       sessionTimeout: Joi.number().allow(null).default(null),
       secureCookies: Joi.boolean().default(false),
-      public: Joi.object({
-        protocol: Joi.string().valid(['http', 'https']),
-        hostname: Joi.string().hostname(),
-        port: Joi.number().integer().min(0).max(65535)
-      }).default(),
       authorization: Joi.object({
         legacyFallback: Joi.object({
           enabled: Joi.boolean().default(true) // deprecated
@@ -51,6 +66,11 @@ export const security = (kibana) => new kibana.Plugin({
       audit: Joi.object({
         enabled: Joi.boolean().default(false)
       }).default(),
+      authc: Joi.object({
+        providers: Joi.array().items(Joi.string()).default(['basic']),
+        oidc: providerOptionsSchema('oidc', Joi.object({ realm: Joi.string().required() }).required()),
+        saml: providerOptionsSchema('saml', Joi.object({ realm: Joi.string().required() }).required()),
+      }).default()
     }).default();
   },
 
@@ -68,6 +88,12 @@ export const security = (kibana) => new kibana.Plugin({
       id: 'login',
       title: 'Login',
       main: 'plugins/security/views/login',
+      hidden: true,
+    }, {
+      id: 'overwritten_session',
+      title: 'Overwritten Session',
+      main: 'plugins/security/views/overwritten_session',
+      description: 'The view is shown when user had an active session previously, but logged in as a different user.',
       hidden: true,
     }, {
       id: 'logout',
@@ -96,6 +122,20 @@ export const security = (kibana) => new kibana.Plugin({
     }
   },
 
+  async postInit(server) {
+    const plugin = this;
+
+    const xpackMainPlugin = server.plugins.xpack_main;
+
+    watchStatusAndLicenseToInitialize(xpackMainPlugin, plugin, async (license) => {
+      if (license.allowRbac) {
+        const { security } = server.plugins;
+        await validateFeaturePrivileges(security.authorization.actions, xpackMainPlugin.getFeatures());
+        await registerPrivilegesWithCluster(server);
+      }
+    });
+  },
+
   async init(server) {
     const plugin = this;
 
@@ -120,19 +160,16 @@ export const security = (kibana) => new kibana.Plugin({
     // automatically assigned to all routes that don't contain an auth config.
     server.auth.default('session');
 
+    const { savedObjects } = server;
+
+    const spaces = createOptionalPlugin(config, 'xpack.spaces', server.plugins, 'spaces');
+
     // exposes server.plugins.security.authorization
-    const authorization = createAuthorizationService(server, xpackInfoFeature);
+    const authorization = createAuthorizationService(server, xpackInfoFeature, xpackMainPlugin, spaces);
     server.expose('authorization', deepFreeze(authorization));
 
-    watchStatusAndLicenseToInitialize(xpackMainPlugin, plugin, async (license) => {
-      if (license.allowRbac) {
-        await registerPrivilegesWithCluster(server);
-      }
-    });
+    const auditLogger = new SecurityAuditLogger(new AuditLogger(server, 'security', server.config(), xpackInfo));
 
-    const auditLogger = new SecurityAuditLogger(server.config(), new AuditLogger(server, 'security'));
-
-    const { savedObjects } = server;
     savedObjects.setScopedSavedObjectsClientFactory(({
       request,
     }) => {
@@ -149,19 +186,16 @@ export const security = (kibana) => new kibana.Plugin({
       return new savedObjects.SavedObjectsClient(callWithRequestRepository);
     });
 
-    savedObjects.addScopedSavedObjectsClientWrapperFactory(Number.MIN_VALUE, ({ client, request }) => {
+    savedObjects.addScopedSavedObjectsClientWrapperFactory(Number.MIN_SAFE_INTEGER, ({ client, request }) => {
       if (authorization.mode.useRbacForRequest(request)) {
-        const { spaces } = server.plugins;
-
         return new SecureSavedObjectsClientWrapper({
           actions: authorization.actions,
           auditLogger,
           baseClient: client,
-          checkPrivilegesWithRequest: authorization.checkPrivilegesWithRequest,
+          checkPrivilegesDynamicallyWithRequest: authorization.checkPrivilegesDynamicallyWithRequest,
           errors: savedObjects.SavedObjectsClient.errors,
           request,
           savedObjectTypes: savedObjects.types,
-          spaces,
         });
       }
 
@@ -172,12 +206,16 @@ export const security = (kibana) => new kibana.Plugin({
 
     await initAuthenticator(server);
     initAuthenticateApi(server);
+    initAPIAuthorization(server, authorization);
+    initAppAuthorization(server, xpackMainPlugin, authorization);
     initUsersApi(server);
-    initPublicRolesApi(server);
+    initExternalRolesApi(server);
     initIndicesApi(server);
+    initPrivilegesApi(server);
     initLoginView(server, xpackMainPlugin);
     initLogoutView(server);
     initLoggedOutView(server);
+    initOverwrittenSessionView(server);
 
     server.injectUiAppVars('login', () => {
 
@@ -191,6 +229,23 @@ export const security = (kibana) => new kibana.Plugin({
           layout,
         }
       };
+    });
+
+    server.registerCapabilitiesModifier((request, uiCapabilities) => {
+      // if we have a license which doesn't enable security, or we're a legacy user
+      // we shouldn't disable any ui capabilities
+      const { authorization } = server.plugins.security;
+      if (!authorization.mode.useRbacForRequest(request)) {
+        return uiCapabilities;
+      }
+
+      const disableUICapabilites = disableUICapabilitesFactory(server, request);
+      // if we're an anonymous route, we disable all ui capabilities
+      if (request.route.settings.auth === false) {
+        return disableUICapabilites.all(uiCapabilities);
+      }
+
+      return disableUICapabilites.usingPrivileges(uiCapabilities);
     });
   }
 });

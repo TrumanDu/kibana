@@ -16,36 +16,61 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
 import { Server, ServerOptions } from 'hapi';
 import { HttpService } from './http_service';
+import { HttpServerSetup } from './http_server';
+import { HttpServiceSetup } from './http_service';
+
+type ServiceSetupMockType = jest.Mocked<HttpServiceSetup> & {
+  basePath: jest.Mocked<HttpServiceSetup['basePath']>;
+};
+const createSetupContractMock = () => {
+  const setupContract: ServiceSetupMockType = {
+    options: ({} as unknown) as ServerOptions,
+    // we can mock some hapi server method when we need it
+    server: {} as Server,
+    registerOnPreAuth: jest.fn(),
+    registerAuth: jest.fn(),
+    registerOnPostAuth: jest.fn(),
+    registerRouter: jest.fn(),
+    basePath: {
+      get: jest.fn(),
+      set: jest.fn(),
+      prepend: jest.fn(),
+      remove: jest.fn(),
+    },
+    auth: {
+      get: jest.fn(),
+      isAuthenticated: jest.fn(),
+    },
+    createNewServer: jest.fn(),
+  };
+  setupContract.createNewServer.mockResolvedValue({} as HttpServerSetup);
+  return setupContract;
+};
 
 const createStartContractMock = () => {
   const startContract = {
-    // we can mock some hapi server method when we need it
-    server: {} as Server,
-    options: {} as ServerOptions,
+    isListening: jest.fn(),
   };
+  startContract.isListening.mockReturnValue(true);
   return startContract;
 };
 
-type MethodKeysOf<T> = {
-  [K in keyof T]: T[K] extends (...args: any[]) => any ? K : never
-}[keyof T];
-
-type PublicMethodsOf<T> = Pick<T, MethodKeysOf<T>>;
-
-type HttpSericeContract = PublicMethodsOf<HttpService>;
+type HttpServiceContract = PublicMethodsOf<HttpService>;
 const createHttpServiceMock = () => {
-  const mocked: jest.Mocked<HttpSericeContract> = {
+  const mocked: jest.Mocked<HttpServiceContract> = {
+    setup: jest.fn(),
     start: jest.fn(),
     stop: jest.fn(),
-    registerRouter: jest.fn(),
   };
+  mocked.setup.mockResolvedValue(createSetupContractMock());
   mocked.start.mockResolvedValue(createStartContractMock());
   return mocked;
 };
 
 export const httpServiceMock = {
   create: createHttpServiceMock,
-  createStartContract: createStartContractMock,
+  createSetupContract: createSetupContractMock,
 };

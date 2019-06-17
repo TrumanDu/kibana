@@ -17,6 +17,7 @@ export const isDetailPanelOpen = (state) => !!getDetailPanelType(state);
 export const getDetailPanelIndexName = (state) => state.detailPanel.indexName;
 export const getIndices = (state) => state.indices.byId;
 export const indicesLoading = (state) => state.indices.loading;
+export const indicesError = (state) => state.indices.error;
 export const getIndicesAsArray = (state) => Object.values(state.indices.byId);
 export const getIndicesByName = (state, indexNames) => {
   const indices = getIndices(state);
@@ -32,7 +33,7 @@ export const getIndexStatusByIndexName = (state, indexName) => {
   const { status } = indices[indexName] || {};
   return status;
 };
-const defaultFilterFields = ['name', 'uuid'];
+const defaultFilterFields = ['name'];
 
 const filterByToggles = (indices, toggleNameToVisibleMap) => {
   const togglesByName = getToggleExtensions().reduce((byName, toggle) => ({
@@ -68,7 +69,8 @@ const getFilteredIndices = createSelector(
       ? indexArray
       : indexArray.filter(index => !(index.name + '').startsWith('.'));
     const filter = tableState.filter || EuiSearchBar.Query.MATCH_ALL;
-    return EuiSearchBar.Query.execute(filter, systemFilteredIndexes, defaultFilterFields);
+    return EuiSearchBar.Query.execute(filter, systemFilteredIndexes,
+      { defaultFields: defaultFilterFields });
   }
 );
 export const getTotalItems = createSelector(

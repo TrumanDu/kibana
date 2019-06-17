@@ -3,23 +3,38 @@
  * or more contributor license agreements. Licensed under the Elastic License;
  * you may not use this file except in compliance with the Elastic License.
  */
+
+import { setMockCapabilities } from '../__mocks__/ui_capabilities';
 import React from 'react';
 import { shallowWithIntl } from 'test_utils/enzyme_helpers';
-import { UserProfileProvider } from '../../../xpack_main/public/services/user_profile';
 import { ManageSpacesButton } from './manage_spaces_button';
-
-const buildUserProfile = (canManageSpaces: boolean) => {
-  return UserProfileProvider({ manageSpaces: canManageSpaces });
-};
 
 describe('ManageSpacesButton', () => {
   it('renders as expected', () => {
-    const component = <ManageSpacesButton userProfile={buildUserProfile(true)} />;
+    setMockCapabilities({
+      navLinks: {},
+      management: {},
+      catalogue: {},
+      spaces: {
+        manage: true,
+      },
+    });
+
+    const component = <ManageSpacesButton />;
     expect(shallowWithIntl(component)).toMatchSnapshot();
   });
 
   it(`doesn't render if user profile forbids managing spaces`, () => {
-    const component = <ManageSpacesButton userProfile={buildUserProfile(false)} />;
+    setMockCapabilities({
+      navLinks: {},
+      management: {},
+      catalogue: {},
+      spaces: {
+        manage: false,
+      },
+    });
+
+    const component = <ManageSpacesButton />;
     expect(shallowWithIntl(component)).toMatchSnapshot();
   });
 });

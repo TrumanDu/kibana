@@ -19,22 +19,11 @@
 
 import { ElasticsearchConfig } from './elasticsearch_config';
 
-const MockClient = jest.fn();
-jest.mock('elasticsearch', () => ({
-  // Jest types don't include `requireActual` right now.
-  ...(jest as any).requireActual('elasticsearch'),
-  Client: MockClient,
-}));
-
-const MockScopedClusterClient = jest.fn();
-jest.mock('./scoped_cluster_client', () => ({
-  ScopedClusterClient: MockScopedClusterClient,
-}));
-
-const mockParseElasticsearchClientConfig = jest.fn();
-jest.mock('./elasticsearch_client_config', () => ({
-  parseElasticsearchClientConfig: mockParseElasticsearchClientConfig,
-}));
+import {
+  MockClient,
+  mockParseElasticsearchClientConfig,
+  MockScopedClusterClient,
+} from './cluster_client.test.mocks';
 
 import { errors } from 'elasticsearch';
 import { get } from 'lodash';
@@ -174,6 +163,25 @@ describe('#callAsInternalUser', () => {
     await expect(
       clusterClient.callAsInternalUser('ping', undefined, { wrap401Errors: true })
     ).rejects.toStrictEqual(mockAuthenticationError);
+  });
+
+  test('aborts the request and rejects if a signal is provided and aborted', async () => {
+    const controller = new AbortController();
+
+    // The ES client returns a promise with an additional `abort` method to abort the request
+    const mockValue: any = Promise.resolve();
+    mockValue.abort = jest.fn();
+    mockEsClientInstance.ping.mockReturnValue(mockValue);
+
+    const promise = clusterClient.callAsInternalUser('ping', undefined, {
+      wrap401Errors: false,
+      signal: controller.signal,
+    });
+
+    controller.abort();
+
+    expect(mockValue.abort).toHaveBeenCalled();
+    await expect(promise).rejects.toThrowErrorMatchingInlineSnapshot(`"Request was aborted"`);
   });
 
   test('does not override WWW-Authenticate if returned by Elasticsearch', async () => {

@@ -7,9 +7,9 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import {
-  EuiColorPicker,
-  EuiFormControlLayout
+  EuiColorPicker
 } from '@elastic/eui';
+import { staticColorShape } from '../style_option_shapes';
 
 export function StaticColorSelection({ onChange, styleOptions }) {
   const onColorChange = color => {
@@ -17,19 +17,14 @@ export function StaticColorSelection({ onChange, styleOptions }) {
   };
 
   return (
-    <EuiFormControlLayout>
-      <EuiColorPicker
-        onChange={onColorChange}
-        color={styleOptions.color}
-        className="mapColorPicker euiFieldText"
-      />
-    </EuiFormControlLayout>
+    <EuiColorPicker
+      onChange={onColorChange}
+      color={styleOptions.color}
+    />
   );
 }
 
 StaticColorSelection.propTypes = {
-  styleOptions: PropTypes.shape({
-    color: PropTypes.string.isRequired,
-  }).isRequired,
+  styleOptions: staticColorShape.isRequired,
   onChange: PropTypes.func.isRequired
 };

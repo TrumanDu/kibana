@@ -12,7 +12,7 @@ import {
   convertMapExtentToPolygon,
 } from './elasticsearch_geo_utils';
 
-import { IndexPatternsFlattenHitProvider } from 'ui/index_patterns/_flatten_hit';
+import { flattenHitWrapper } from 'ui/index_patterns/_flatten_hit';
 
 const geoFieldName = 'location';
 const mapExtent = {
@@ -58,6 +58,7 @@ describe('hitsToGeoJson', () => {
       type: 'Feature',
     });
   });
+
 
   it('Should handle documents where geoField is not populated', () => {
     const hits = [
@@ -131,16 +132,6 @@ describe('hitsToGeoJson', () => {
   });
 
   describe('dot in geoFieldName', () => {
-    const configMock = {
-      get: (key) => {
-        if (key === 'metaFields') {
-          return [];
-        }
-        throw new Error(`Unexpected config key: ${key}`);
-      },
-      watch: () => {}
-    };
-    const flattenHitWrapper = IndexPatternsFlattenHitProvider(configMock); // eslint-disable-line new-cap
     const indexPatternMock = {
       fields: {
         byName: {
@@ -200,7 +191,8 @@ describe('geoPointToGeometry', () => {
 
   it('Should convert value stored as geo-point string', () => {
     const value = `${lat},${lon}`;
-    const points = geoPointToGeometry(value);
+    const points = [];
+    geoPointToGeometry(value, points);
     expect(points.length).toBe(1);
     expect(points[0].type).toBe('Point');
     expect(points[0].coordinates).toEqual([lon, lat]);
@@ -208,7 +200,8 @@ describe('geoPointToGeometry', () => {
 
   it('Should convert value stored as geo-point array', () => {
     const value = [lon, lat];
-    const points = geoPointToGeometry(value);
+    const points = [];
+    geoPointToGeometry(value, points);
     expect(points.length).toBe(1);
     expect(points[0].type).toBe('Point');
     expect(points[0].coordinates).toEqual([lon, lat]);
@@ -219,7 +212,8 @@ describe('geoPointToGeometry', () => {
       lat,
       lon,
     };
-    const points = geoPointToGeometry(value);
+    const points = [];
+    geoPointToGeometry(value, points);
     expect(points.length).toBe(1);
     expect(points[0].type).toBe('Point');
     expect(points[0].coordinates).toEqual([lon, lat]);
@@ -235,11 +229,21 @@ describe('geoPointToGeometry', () => {
       },
       `${lat2},${lon2}`
     ];
-    const points = geoPointToGeometry(value);
+    const points = [];
+    geoPointToGeometry(value, points);
     expect(points.length).toBe(2);
     expect(points[0].coordinates).toEqual([lon, lat]);
     expect(points[1].coordinates).toEqual([lon2, lat2]);
   });
+
+  it('Should handle point as geohash string', () => {
+    const geohashValue = 'drm3btev3e86';
+    const points = [];
+    geoPointToGeometry(geohashValue, points);
+    expect(points.length).toBe(1);
+    expect(points[0].coordinates).toEqual([-71.34000012651086, 41.12000000663102]);
+  });
+
 });
 
 describe('geoShapeToGeometry', () => {
@@ -249,7 +253,8 @@ describe('geoShapeToGeometry', () => {
       type: 'linestring',
       coordinates: coordinates
     };
-    const shapes = geoShapeToGeometry(value);
+    const shapes = [];
+    geoShapeToGeometry(value, shapes);
     expect(shapes.length).toBe(1);
     expect(shapes[0].type).toBe('LineString');
     expect(shapes[0].coordinates).toEqual(coordinates);
@@ -268,13 +273,38 @@ describe('geoShapeToGeometry', () => {
         coordinates: pointCoordinates
       }
     ];
-    const shapes = geoShapeToGeometry(value);
+    const shapes = [];
+    geoShapeToGeometry(value, shapes);
     expect(shapes.length).toBe(2);
     expect(shapes[0].type).toBe('LineString');
     expect(shapes[0].coordinates).toEqual(linestringCoordinates);
     expect(shapes[1].type).toBe('Point');
     expect(shapes[1].coordinates).toEqual(pointCoordinates);
   });
+
+
+  it('Should convert wkt shapes to geojson', () => {
+
+    const pointWkt = 'POINT (32 40)';
+    const linestringWkt = 'LINESTRING (50 60, 70 80)';
+
+
+    const shapes = [];
+    geoShapeToGeometry(pointWkt, shapes);
+    geoShapeToGeometry(linestringWkt, shapes);
+
+    expect(shapes.length).toBe(2);
+    expect(shapes[0]).toEqual({
+      coordinates: [32, 40],
+      type: 'Point',
+    });
+    expect(shapes[1]).toEqual({
+      coordinates: [[50, 60], [70, 80]],
+      type: 'LineString',
+    });
+  });
+
+
 });
 
 describe('createExtentFilter', () => {

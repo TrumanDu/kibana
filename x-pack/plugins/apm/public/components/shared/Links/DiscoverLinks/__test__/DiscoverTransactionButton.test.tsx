@@ -7,12 +7,14 @@
 import { shallow } from 'enzyme';
 import 'jest-styled-components';
 import React from 'react';
-import { Transaction } from 'x-pack/plugins/apm/typings/es_schemas/ui/Transaction';
+import { Transaction } from '../../../../../../typings/es_schemas/ui/Transaction';
 import {
   DiscoverTransactionLink,
   getDiscoverQuery
 } from '../DiscoverTransactionLink';
 import mockTransaction from './mockTransaction.json';
+
+jest.mock('ui/kfetch');
 
 describe('DiscoverTransactionLink component', () => {
   it('should render with data', () => {

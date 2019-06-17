@@ -11,8 +11,8 @@ import {
   InfraFrameworkRequest,
   InfraMetadataAggregationResponse,
 } from '../framework';
-import { NAME_FIELDS } from '../nodes/constants';
 import { InfraMetadataAdapter, InfraMetricsAdapterResponse } from './adapter_types';
+import { NAME_FIELDS } from '../../constants';
 
 export class ElasticsearchMetadataAdapter implements InfraMetadataAdapter {
   private framework: InfraBackendFrameworkAdapter;
@@ -28,6 +28,8 @@ export class ElasticsearchMetadataAdapter implements InfraMetadataAdapter {
   ): Promise<InfraMetricsAdapterResponse> {
     const idFieldName = getIdFieldName(sourceConfiguration, nodeType);
     const metricQuery = {
+      allowNoIndices: true,
+      ignoreUnavailable: true,
       index: sourceConfiguration.metricAlias,
       body: {
         query: {
@@ -80,6 +82,8 @@ export class ElasticsearchMetadataAdapter implements InfraMetadataAdapter {
   ): Promise<InfraMetricsAdapterResponse> {
     const idFieldName = getIdFieldName(sourceConfiguration, nodeType);
     const logQuery = {
+      allowNoIndices: true,
+      ignoreUnavailable: true,
       index: sourceConfiguration.logAlias,
       body: {
         query: {

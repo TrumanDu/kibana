@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import expect from 'expect.js';
+import expect from '@kbn/expect';
 import ngMock from 'ng_mock';
 import sinon from 'sinon';
 
@@ -91,7 +91,7 @@ describe('context app', function () {
       return fetchAnchor('INDEX_PATTERN_ID', 'doc', 'id', [{ '@timestamp': 'desc' }, { '_doc': 'desc' }])
         .then(() => {
           const setFieldSpy = searchSourceStub.setField;
-          expect(setFieldSpy.firstCall.args[1]).to.eql({ id: 'INDEX_PATTERN_ID' });
+          expect(setFieldSpy.firstCall.args[1].id).to.eql('INDEX_PATTERN_ID');
         });
     });
 
@@ -129,7 +129,6 @@ describe('context app', function () {
               constant_score: {
                 filter: {
                   ids: {
-                    type: 'doc',
                     values: ['id'],
                   },
                 }
