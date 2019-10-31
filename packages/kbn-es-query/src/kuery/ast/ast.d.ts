@@ -17,11 +17,11 @@
  * under the License.
  */
 
+import { JsonObject } from '..';
+
 /**
  * WARNING: these typings are incomplete
  */
-
-import { StaticIndexPattern } from 'ui/index_patterns';
 
 export type KueryNode = any;
 
@@ -32,20 +32,11 @@ export interface KueryParseOptions {
   startRule: string;
 }
 
-type JsonValue = null | boolean | number | string | JsonObject | JsonArray;
-
-interface JsonObject {
-  [key: string]: JsonValue;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-interface JsonArray extends Array<JsonValue> {}
-
 export function fromKueryExpression(
   expression: string,
   parseOptions?: KueryParseOptions
 ): KueryNode;
 
-export function toElasticsearchQuery(node: KueryNode, indexPattern: StaticIndexPattern): JsonObject;
+export function toElasticsearchQuery(node: KueryNode, indexPattern?: any): JsonObject;
 
 export function doesKueryExpressionHaveLuceneSyntaxError(expression: string): boolean;

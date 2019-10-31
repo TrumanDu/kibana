@@ -30,6 +30,8 @@ import expect from '@kbn/expect';
 export default function ({ getService, getPageObjects }) {
   const find = getService('find');
   const browser = getService('browser');
+  const esArchiver = getService('esArchiver');
+  const kibanaServer = getService('kibanaServer');
   const pieChart = getService('pieChart');
   const dashboardExpect = getService('dashboardExpect');
   const dashboardAddPanel = getService('dashboardAddPanel');
@@ -45,12 +47,11 @@ export default function ({ getService, getPageObjects }) {
     await dashboardExpect.timelionLegendCount(0);
     await dashboardExpect.markdownWithValuesExists(['I\'m a markdown!']);
     await dashboardExpect.vegaTextsExist(['5,000']);
-    await dashboardExpect.goalAndGuageLabelsExist(['63%', '56%', '11.915 GB']);
+    await dashboardExpect.goalAndGuageLabelsExist(['62.925%', '55.625%', '11.915 GB']);
     await dashboardExpect.dataTableRowCount(5);
     await dashboardExpect.tagCloudWithValuesFound(['CN', 'IN', 'US', 'BR', 'ID']);
     // TODO add test for 'region map viz'
     // TODO add test for 'tsvb gauge' viz
-    await dashboardExpect.tsvbTimeSeriesLegendCount(1);
     // TODO add test for 'geo map' viz
     // This tests the presence of the two input control embeddables
     await dashboardExpect.inputControlItemCount(5);
@@ -86,13 +87,19 @@ export default function ({ getService, getPageObjects }) {
     await dashboardExpect.tsvbMetricValuesExist(['0']);
     await dashboardExpect.tsvbMarkdownWithValuesExists(['Hi Avg last bytes: 0']);
     await dashboardExpect.tsvbTableCellCount(0);
-    await dashboardExpect.tsvbTimeSeriesLegendCount(1);
     await dashboardExpect.tsvbTopNValuesExist(['0']);
     await dashboardExpect.vegaTextsDoNotExist(['5,000']);
   };
 
-  describe('dashboard embeddable rendering', function describeIndexTests() {
+  // FLAKY: https://github.com/elastic/kibana/issues/46305
+  describe.skip('dashboard embeddable rendering', function describeIndexTests() {
     before(async () => {
+      await esArchiver.load('dashboard/current/kibana');
+      await kibanaServer.uiSettings.replace({
+        'defaultIndex': '0bf35f60-3dc9-11e8-8660-4d65aa086b3c',
+      });
+      await PageObjects.common.navigateToApp('dashboard');
+      await PageObjects.dashboard.preserveCrossAppState();
       await PageObjects.dashboard.clickNewDashboard();
 
       const fromTime = '2018-01-01 00:00:00.000';

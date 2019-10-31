@@ -22,7 +22,6 @@ import PropTypes from 'prop-types';
 import { Synopsis } from './synopsis';
 import { AddData } from './add_data';
 import { FormattedMessage } from '@kbn/i18n/react';
-import chrome from 'ui/chrome';
 
 import {
   EuiButton,
@@ -35,10 +34,12 @@ import {
   EuiFlexGrid,
   EuiText,
   EuiPageBody,
+  EuiScreenReaderOnly,
 } from '@elastic/eui';
 
 import { Welcome } from './welcome';
 import { FeatureCatalogueCategory } from 'ui/registry/feature_catalogue';
+import { getServices } from '../kibana_services';
 
 const KEY_ENABLE_WELCOME = 'home:welcome:show';
 
@@ -46,7 +47,10 @@ export class Home extends Component {
   constructor(props) {
     super(props);
 
-    const isWelcomeEnabled = !(chrome.getInjected('disableWelcomeScreen') || props.localStorage.getItem(KEY_ENABLE_WELCOME) === 'false');
+    const isWelcomeEnabled = !(
+      getServices().getInjected('disableWelcomeScreen') ||
+      props.localStorage.getItem(KEY_ENABLE_WELCOME) === 'false'
+    );
 
     this.state = {
       // If welcome is enabled, we wait for loading to complete
@@ -135,6 +139,15 @@ export class Home extends Component {
       <EuiPage restrictWidth={1200}>
         <EuiPageBody className="eui-displayBlock">
 
+          <EuiScreenReaderOnly>
+            <h1>
+              <FormattedMessage
+                id="kbn.home.welcomeHomePageHeader"
+                defaultMessage="Kibana home"
+              />
+            </h1>
+          </EuiScreenReaderOnly>
+
           <AddData
             apmUiEnabled={apmUiEnabled}
             mlEnabled={mlEnabled}
@@ -147,12 +160,12 @@ export class Home extends Component {
             <EuiFlexItem>
               <EuiPanel paddingSize="l">
                 <EuiTitle size="s">
-                  <h3>
+                  <h2>
                     <FormattedMessage
                       id="kbn.home.directories.visualize.nameTitle"
                       defaultMessage="Visualize and Explore Data"
                     />
-                  </h3>
+                  </h2>
                 </EuiTitle>
                 <EuiSpacer size="m" />
                 <EuiFlexGrid columns={2} gutterSize="s">
@@ -163,12 +176,12 @@ export class Home extends Component {
             <EuiFlexItem>
               <EuiPanel paddingSize="l">
                 <EuiTitle size="s">
-                  <h3>
+                  <h2>
                     <FormattedMessage
                       id="kbn.home.directories.manage.nameTitle"
                       defaultMessage="Manage and Administer the Elastic Stack"
                     />
-                  </h3>
+                  </h2>
                 </EuiTitle>
                 <EuiSpacer size="m" />
                 <EuiFlexGrid columns={2}>
@@ -215,6 +228,10 @@ export class Home extends Component {
       <Welcome
         onSkip={this.skipWelcome}
         urlBasePath={this.props.urlBasePath}
+        shouldShowTelemetryOptIn={this.props.shouldShowTelemetryOptIn}
+        fetchTelemetry={this.props.fetchTelemetry}
+        setOptIn={this.props.setOptIn}
+        getTelemetryBannerId={this.props.getTelemetryBannerId}
       />
     );
   }
@@ -237,6 +254,10 @@ export class Home extends Component {
 
 Home.propTypes = {
   addBasePath: PropTypes.func.isRequired,
+  fetchTelemetry: PropTypes.func.isRequired,
+  getTelemetryBannerId: PropTypes.func.isRequired,
+  setOptIn: PropTypes.func.isRequired,
+  shouldShowTelemetryOptIn: PropTypes.bool,
   directories: PropTypes.arrayOf(
     PropTypes.shape({
       id: PropTypes.string.isRequired,

@@ -21,13 +21,14 @@ import { Observable } from 'rxjs';
 import { filter, first, map, mergeMap, tap, toArray } from 'rxjs/operators';
 import { CoreService } from '../../types';
 import { CoreContext } from '../core_context';
-import { ElasticsearchServiceSetup } from '../elasticsearch/elasticsearch_service';
-import { HttpServiceSetup } from '../http/http_service';
+
 import { Logger } from '../logging';
 import { discover, PluginDiscoveryError, PluginDiscoveryErrorType } from './discovery';
-import { DiscoveredPlugin, DiscoveredPluginInternal, PluginWrapper, PluginName } from './plugin';
+import { PluginWrapper } from './plugin';
+import { DiscoveredPlugin, DiscoveredPluginInternal, PluginName } from './types';
 import { PluginsConfig, PluginsConfigType } from './plugins_config';
 import { PluginsSystem } from './plugins_system';
+import { InternalCoreSetup } from '..';
 
 /** @public */
 export interface PluginsServiceSetup {
@@ -44,10 +45,7 @@ export interface PluginsServiceStart {
 }
 
 /** @internal */
-export interface PluginsServiceSetupDeps {
-  elasticsearch: ElasticsearchServiceSetup;
-  http: HttpServiceSetup;
-}
+export type PluginsServiceSetupDeps = InternalCoreSetup;
 
 /** @internal */
 export interface PluginsServiceStartDeps {} // eslint-disable-line @typescript-eslint/no-empty-interface
@@ -66,14 +64,23 @@ export class PluginsService implements CoreService<PluginsServiceSetup, PluginsS
       .pipe(map(rawConfig => new PluginsConfig(rawConfig, coreContext.env)));
   }
 
-  public async setup(deps: PluginsServiceSetupDeps) {
-    this.log.debug('Setting up plugins service');
+  public async discover() {
+    this.log.debug('Discovering plugins');
 
     const config = await this.config$.pipe(first()).toPromise();
 
     const { error$, plugin$ } = discover(config, this.coreContext);
     await this.handleDiscoveryErrors(error$);
     await this.handleDiscoveredPlugins(plugin$);
+
+    // Return dependency tree
+    return this.pluginsSystem.getPluginDependencies();
+  }
+
+  public async setup(deps: PluginsServiceSetupDeps) {
+    this.log.debug('Setting up plugins service');
+
+    const config = await this.config$.pipe(first()).toPromise();
 
     if (!config.initialize || this.coreContext.env.isDevClusterMaster) {
       this.log.info('Plugin initialization disabled.');
@@ -163,15 +170,18 @@ export class PluginsService implements CoreService<PluginsServiceSetup, PluginsS
 
   private shouldEnablePlugin(
     pluginName: PluginName,
-    pluginEnableStatuses: Map<PluginName, { plugin: PluginWrapper; isEnabled: boolean }>
+    pluginEnableStatuses: Map<PluginName, { plugin: PluginWrapper; isEnabled: boolean }>,
+    parents: PluginName[] = []
   ): boolean {
     const pluginInfo = pluginEnableStatuses.get(pluginName);
     return (
       pluginInfo !== undefined &&
       pluginInfo.isEnabled &&
-      pluginInfo.plugin.requiredPlugins.every(dependencyName =>
-        this.shouldEnablePlugin(dependencyName, pluginEnableStatuses)
-      )
+      pluginInfo.plugin.requiredPlugins
+        .filter(dep => !parents.includes(dep))
+        .every(dependencyName =>
+          this.shouldEnablePlugin(dependencyName, pluginEnableStatuses, [...parents, pluginName])
+        )
     );
   }
 }

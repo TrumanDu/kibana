@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { castEsToKbnFieldTypeName } from '../legacy/utils';
+import { castEsToKbnFieldTypeName } from '../plugins/data/common';
 // eslint-disable-next-line max-len
 import { shouldReadFieldFromDocValues } from '../legacy/server/index_patterns/service/lib/field_capabilities/should_read_field_from_doc_values';
 
@@ -25,7 +25,7 @@ function stubbedLogstashFields() {
   return [
     //                                  |aggregatable
     //                                  |      |searchable
-    // name               esType        |      |      |metadata       | parent      | subType
+    // name               esType        |      |      |metadata       | subType
     ['bytes',             'long',       true,  true,  { count: 10 } ],
     ['ssl',               'boolean',    true,  true,  { count: 20 } ],
     ['@timestamp',        'date',       true,  true,  { count: 30 } ],
@@ -39,9 +39,10 @@ function stubbedLogstashFields() {
     ['area',              'geo_shape',  true,  true ],
     ['hashed',            'murmur3',    false, true ],
     ['geo.coordinates',   'geo_point',  true,  true ],
-    ['extension',         'keyword',    true,  true ],
+    ['extension',         'text',       true,  true],
+    ['extension.keyword', 'keyword',    true,  true,   {},            { multi: { parent: 'extension' } } ],
     ['machine.os',        'text',       true,  true ],
-    ['machine.os.raw',    'keyword',    true,  true,   {},            'machine.os', 'multi' ],
+    ['machine.os.raw',    'keyword',    true,  true,   {},            { multi: { parent: 'machine.os' } } ],
     ['geo.src',           'keyword',    true,  true ],
     ['_id',               '_id',        true,  true ],
     ['_type',             '_type',      true,  true ],
@@ -60,7 +61,6 @@ function stubbedLogstashFields() {
       aggregatable,
       searchable,
       metadata = {},
-      parent = undefined,
       subType = undefined,
     ] = row;
 
@@ -86,7 +86,6 @@ function stubbedLogstashFields() {
       script,
       lang,
       scripted,
-      parent,
       subType,
     };
   });

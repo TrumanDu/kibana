@@ -17,14 +17,22 @@
  * under the License.
  */
 
-import chrome from 'ui/chrome';
-import { PersistedLog } from 'ui/persisted_log';
+import { UiSettingsClientContract } from 'src/core/public';
+import { IStorageWrapper } from 'src/plugins/kibana_utils/public';
+import { PersistedLog } from '../../persisted_log';
 
-const config = chrome.getUiSettingsClient();
-
-export function getQueryLog(appName: string, language: string) {
-  return new PersistedLog(`typeahead:${appName}-${language}`, {
-    maxLength: config.get('history:limit'),
-    filterDuplicates: true,
-  });
+export function getQueryLog(
+  uiSettings: UiSettingsClientContract,
+  storage: IStorageWrapper,
+  appName: string,
+  language: string
+) {
+  return new PersistedLog(
+    `typeahead:${appName}-${language}`,
+    {
+      maxLength: uiSettings.get('history:limit'),
+      filterDuplicates: true,
+    },
+    storage
+  );
 }

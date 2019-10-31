@@ -21,7 +21,8 @@ import { pick } from 'lodash';
 
 import { CoreContext } from '../core_context';
 import { Logger } from '../logging';
-import { DiscoveredPlugin, DiscoveredPluginInternal, PluginWrapper, PluginName } from './plugin';
+import { PluginWrapper } from './plugin';
+import { DiscoveredPlugin, DiscoveredPluginInternal, PluginName, PluginOpaqueId } from './types';
 import { createPluginSetupContext, createPluginStartContext } from './plugin_context';
 import { PluginsServiceSetupDeps, PluginsServiceStartDeps } from './plugins_service';
 
@@ -38,6 +39,25 @@ export class PluginsSystem {
 
   public addPlugin(plugin: PluginWrapper) {
     this.plugins.set(plugin.name, plugin);
+  }
+
+  /**
+   * @returns a ReadonlyMap of each plugin and an Array of its available dependencies
+   * @internal
+   */
+  public getPluginDependencies(): ReadonlyMap<PluginOpaqueId, PluginOpaqueId[]> {
+    // Return dependency map of opaque ids
+    return new Map(
+      [...this.plugins].map(([name, plugin]) => [
+        plugin.opaqueId,
+        [
+          ...new Set([
+            ...plugin.requiredPlugins,
+            ...plugin.optionalPlugins.filter(optPlugin => this.plugins.has(optPlugin)),
+          ]),
+        ].map(depId => this.plugins.get(depId)!.opaqueId),
+      ])
+    );
   }
 
   public async setupPlugins(deps: PluginsServiceSetupDeps) {
@@ -141,22 +161,23 @@ export class PluginsSystem {
    * Get a Map of all discovered UI plugins in topological order.
    */
   public uiPlugins() {
+    const uiPluginNames = [...this.getTopologicallySortedPluginNames().keys()].filter(
+      pluginName => this.plugins.get(pluginName)!.includesUiPlugin
+    );
     const internal = new Map<PluginName, DiscoveredPluginInternal>(
-      [...this.getTopologicallySortedPluginNames().keys()]
-        .filter(pluginName => this.plugins.get(pluginName)!.includesUiPlugin)
-        .map(pluginName => {
-          const plugin = this.plugins.get(pluginName)!;
-          return [
-            pluginName,
-            {
-              id: pluginName,
-              path: plugin.path,
-              configPath: plugin.manifest.configPath,
-              requiredPlugins: plugin.manifest.requiredPlugins,
-              optionalPlugins: plugin.manifest.optionalPlugins,
-            },
-          ] as [PluginName, DiscoveredPluginInternal];
-        })
+      uiPluginNames.map(pluginName => {
+        const plugin = this.plugins.get(pluginName)!;
+        return [
+          pluginName,
+          {
+            id: pluginName,
+            path: plugin.path,
+            configPath: plugin.manifest.configPath,
+            requiredPlugins: plugin.manifest.requiredPlugins.filter(p => uiPluginNames.includes(p)),
+            optionalPlugins: plugin.manifest.optionalPlugins.filter(p => uiPluginNames.includes(p)),
+          },
+        ] as [PluginName, DiscoveredPluginInternal];
+      })
     );
 
     const publicPlugins = new Map<PluginName, DiscoveredPlugin>(
@@ -224,9 +245,9 @@ export class PluginsSystem {
     }
 
     if (pluginsDependenciesGraph.size > 0) {
-      const edgesLeft = JSON.stringify([...pluginsDependenciesGraph.entries()]);
+      const edgesLeft = JSON.stringify([...pluginsDependenciesGraph.keys()]);
       throw new Error(
-        `Topological ordering of plugins did not complete, these edges could not be ordered: ${edgesLeft}`
+        `Topological ordering of plugins did not complete, these plugins have cyclic or missing dependencies: ${edgesLeft}`
       );
     }
 

@@ -21,6 +21,8 @@ import expect from '@kbn/expect';
 
 export default function ({ getService, getPageObjects }) {
   const queryBar = getService('queryBar');
+  const esArchiver = getService('esArchiver');
+  const kibanaServer = getService('kibanaServer');
   const dashboardAddPanel = getService('dashboardAddPanel');
   const PageObjects = getPageObjects(['dashboard', 'header', 'common', 'visualize', 'timePicker']);
   const dashboardName = 'dashboard with filter';
@@ -28,10 +30,16 @@ export default function ({ getService, getPageObjects }) {
 
   describe('dashboard view edit mode', function viewEditModeTests() {
     before(async () => {
-      await PageObjects.dashboard.gotoDashboardLandingPage();
+      await esArchiver.load('dashboard/current/kibana');
+      await kibanaServer.uiSettings.replace({
+        'defaultIndex': '0bf35f60-3dc9-11e8-8660-4d65aa086b3c',
+      });
+      await PageObjects.common.navigateToApp('dashboard');
+      await PageObjects.dashboard.preserveCrossAppState();
     });
 
     it('create new dashboard opens in edit mode', async function () {
+      await PageObjects.dashboard.gotoDashboardLandingPage();
       await PageObjects.dashboard.clickNewDashboard();
       await PageObjects.dashboard.clickCancelOutOfEditMode();
     });
@@ -53,7 +61,7 @@ export default function ({ getService, getPageObjects }) {
       });
     });
 
-    describe('shows lose changes warning', async function () {
+    describe('shows lose changes warning', function () {
       describe('and loses changes on confirmation', function () {
         beforeEach(async function () {
           await PageObjects.dashboard.gotoDashboardEditMode(dashboardName);
@@ -120,7 +128,7 @@ export default function ({ getService, getPageObjects }) {
           const originalPanelCount = await PageObjects.dashboard.getPanelCount();
 
           await dashboardAddPanel.ensureAddPanelIsShowing();
-          await dashboardAddPanel.clickAddNewEmbeddableLink();
+          await dashboardAddPanel.clickAddNewEmbeddableLink('visualization');
           await PageObjects.visualize.clickAreaChart();
           await PageObjects.visualize.clickNewSearch();
           await PageObjects.visualize.saveVisualizationExpectSuccess('new viz panel');
@@ -195,7 +203,7 @@ export default function ({ getService, getPageObjects }) {
       });
     });
 
-    describe('Does not show lose changes warning', async function () {
+    describe('Does not show lose changes warning', function () {
       it('when time changed is not stored with dashboard', async function () {
         await PageObjects.dashboard.gotoDashboardEditMode(dashboardName);
         await PageObjects.dashboard.saveDashboard(dashboardName, { storeTimeWithDashboard: false });

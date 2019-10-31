@@ -28,9 +28,11 @@ import {
 import { InjectedIntl, injectI18n } from '@kbn/i18n/react';
 import classNames from 'classnames';
 import React, { Component } from 'react';
-import { IndexPattern } from 'ui/index_patterns';
+import { UiSettingsClientContract } from 'src/core/public';
+import { IndexPattern } from '../../index_patterns';
 import { FilterEditor } from './filter_editor';
 import { FilterView } from './filter_view';
+import { getDisplayValueFromFilter } from './filter_editor/lib/get_display_value';
 
 interface Props {
   id: string;
@@ -40,6 +42,7 @@ interface Props {
   onUpdate: (filter: Filter) => void;
   onRemove: () => void;
   intl: InjectedIntl;
+  uiSettings: UiSettingsClientContract;
 }
 
 interface State {
@@ -65,8 +68,9 @@ class FilterItemUI extends Component<Props, State> {
       this.props.className
     );
 
+    const displayName = getDisplayValueFromFilter(filter, this.props.indexPatterns);
     const dataTestSubjKey = filter.meta.key ? `filter-key-${filter.meta.key}` : '';
-    const dataTestSubjValue = filter.meta.value ? `filter-value-${filter.meta.value}` : '';
+    const dataTestSubjValue = filter.meta.value ? `filter-value-${displayName}` : '';
     const dataTestSubjDisabled = `filter-${
       this.props.filter.meta.disabled ? 'disabled' : 'enabled'
     }`;
@@ -74,6 +78,7 @@ class FilterItemUI extends Component<Props, State> {
     const badge = (
       <FilterView
         filter={filter}
+        displayName={displayName}
         className={classes}
         iconOnClick={() => this.props.onRemove()}
         onClick={this.togglePopover}
@@ -161,7 +166,7 @@ class FilterItemUI extends Component<Props, State> {
       },
       {
         id: 1,
-        width: 400,
+        width: 420,
         content: (
           <div>
             <FilterEditor
@@ -178,6 +183,8 @@ class FilterItemUI extends Component<Props, State> {
     return (
       <EuiPopover
         id={`popoverFor_filter${id}`}
+        className={`globalFilterItem__popover`}
+        anchorClassName={`globalFilterItem__popoverAnchor`}
         isOpen={this.state.isPopoverOpen}
         closePopover={this.closePopover}
         button={badge}

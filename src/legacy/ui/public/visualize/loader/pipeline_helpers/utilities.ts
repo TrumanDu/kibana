@@ -20,21 +20,38 @@
 import { i18n } from '@kbn/i18n';
 import { identity } from 'lodash';
 import { AggConfig, Vis } from 'ui/vis';
-// @ts-ignore
-import { FieldFormat } from '../../../../field_formats/field_format';
-// @ts-ignore
+import { SerializedFieldFormat } from 'src/plugins/expressions/public';
+
+import { FieldFormat } from '../../../../../../plugins/data/common/field_formats';
+
 import { tabifyGetColumns } from '../../../agg_response/tabify/_get_columns';
 import chrome from '../../../chrome';
 // @ts-ignore
 import { fieldFormats } from '../../../registry/field_formats';
+import { dateRange } from '../../../utils/date_range';
+import { ipRange } from '../../../utils/ip_range';
+import { DateRangeKey } from '../../../agg_types/buckets/date_range';
+import { IpRangeKey } from '../../../agg_types/buckets/ip_range';
+
+interface TermsFieldFormatParams {
+  otherBucketLabel: string;
+  missingBucketLabel: string;
+  id: string;
+}
+
+function isTermsFieldFormat(
+  serializedFieldFormat: SerializedFieldFormat
+): serializedFieldFormat is SerializedFieldFormat<TermsFieldFormatParams> {
+  return serializedFieldFormat.id === 'terms';
+}
 
 const config = chrome.getUiSettingsClient();
 
 const getConfig = (...args: any[]): any => config.get(...args);
 const getDefaultFieldFormat = () => ({ convert: identity });
 
-const getFieldFormat = (id: string, params: object) => {
-  const Format = fieldFormats.byId[id];
+const getFieldFormat = (id: string | undefined, params: object = {}) => {
+  const Format = fieldFormats.getType(id);
   if (Format) {
     return new Format(params, getConfig);
   } else {
@@ -42,7 +59,41 @@ const getFieldFormat = (id: string, params: object) => {
   }
 };
 
-export const getFormat = (mapping: any) => {
+export const createFormat = (agg: AggConfig): SerializedFieldFormat => {
+  const format: SerializedFieldFormat = agg.params.field ? agg.params.field.format.toJSON() : {};
+  const formats: Record<string, () => SerializedFieldFormat> = {
+    date_range: () => ({ id: 'date_range', params: format }),
+    ip_range: () => ({ id: 'ip_range', params: format }),
+    percentile_ranks: () => ({ id: 'percent' }),
+    count: () => ({ id: 'number' }),
+    cardinality: () => ({ id: 'number' }),
+    date_histogram: () => ({
+      id: 'date',
+      params: {
+        pattern: (agg as any).buckets.getScaledDateFormat(),
+      },
+    }),
+    terms: () => ({
+      id: 'terms',
+      params: {
+        id: format.id,
+        otherBucketLabel: agg.params.otherBucketLabel,
+        missingBucketLabel: agg.params.missingBucketLabel,
+        ...format.params,
+      },
+    }),
+    range: () => ({
+      id: 'range',
+      params: { id: format.id, ...format.params },
+    }),
+  };
+
+  return formats[agg.type.name] ? formats[agg.type.name]() : format;
+};
+
+export type FormatFactory = (mapping?: SerializedFieldFormat) => FieldFormat;
+
+export const getFormat: FormatFactory = (mapping = {}) => {
   if (!mapping) {
     return getDefaultFieldFormat();
   }
@@ -50,25 +101,44 @@ export const getFormat = (mapping: any) => {
   if (id === 'range') {
     const RangeFormat = FieldFormat.from((range: any) => {
       const format = getFieldFormat(id, mapping.params);
+      const gte = '\u2265';
+      const lt = '\u003c';
       return i18n.translate('common.ui.aggTypes.buckets.ranges.rangesFormatMessage', {
-        defaultMessage: '{from} to {to}',
+        defaultMessage: '{gte} {from} and {lt} {to}',
         values: {
+          gte,
           from: format.convert(range.gte),
+          lt,
           to: format.convert(range.lt),
         },
       });
     });
     return new RangeFormat();
-  } else if (id === 'terms') {
+  } else if (id === 'date_range') {
+    const nestedFormatter = mapping.params as SerializedFieldFormat;
+    const DateRangeFormat = FieldFormat.from((range: DateRangeKey) => {
+      const format = getFieldFormat(nestedFormatter.id, nestedFormatter.params);
+      return dateRange.toString(range, format.convert.bind(format));
+    });
+    return new DateRangeFormat();
+  } else if (id === 'ip_range') {
+    const nestedFormatter = mapping.params as SerializedFieldFormat;
+    const IpRangeFormat = FieldFormat.from((range: IpRangeKey) => {
+      const format = getFieldFormat(nestedFormatter.id, nestedFormatter.params);
+      return ipRange.toString(range, format.convert.bind(format));
+    });
+    return new IpRangeFormat();
+  } else if (isTermsFieldFormat(mapping) && mapping.params) {
+    const params = mapping.params;
     return {
       getConverterFor: (type: string) => {
-        const format = getFieldFormat(mapping.params.id, mapping.params);
+        const format = getFieldFormat(params.id, mapping.params);
         return (val: string) => {
           if (val === '__other__') {
-            return mapping.params.otherBucketLabel;
+            return params.otherBucketLabel;
           }
           if (val === '__missing__') {
-            return mapping.params.missingBucketLabel;
+            return params.missingBucketLabel;
           }
           const parsedUrl = {
             origin: window.location.origin,
@@ -79,12 +149,12 @@ export const getFormat = (mapping: any) => {
         };
       },
       convert: (val: string, type: string) => {
-        const format = getFieldFormat(mapping.params.id, mapping.params);
+        const format = getFieldFormat(params.id, mapping.params);
         if (val === '__other__') {
-          return mapping.params.otherBucketLabel;
+          return params.otherBucketLabel;
         }
         if (val === '__missing__') {
-          return mapping.params.missingBucketLabel;
+          return params.missingBucketLabel;
         }
         const parsedUrl = {
           origin: window.location.origin,
@@ -104,5 +174,7 @@ export const getTableAggs = (vis: Vis): AggConfig[] => {
     return [];
   }
   const columns = tabifyGetColumns(vis.aggs.getResponseAggs(), !vis.isHierarchical());
-  return columns.map((c: any) => c.aggConfig);
+  return columns.map(c => c.aggConfig);
 };
+
+export { FieldFormat };

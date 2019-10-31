@@ -157,11 +157,11 @@ export default function ({ getService, getPageObjects }) {
             .to.be(`${tableData[index].alertIcon} ${tableData[index].alertText}`);
         });
 
-        await PageObjects.monitoring.clickBreadcrumb('breadcrumbClusters');
+        await PageObjects.monitoring.clickBreadcrumb('~breadcrumbClusters');
       });
     });
 
-    describe('alert actions take you to the elasticsearch indices listing', async () => {
+    describe('alert actions take you to the elasticsearch indices listing', () => {
       const { setup, tearDown } = getLifecycleMethods(getService, getPageObjects);
 
       before(async () => {
@@ -183,7 +183,7 @@ export default function ({ getService, getPageObjects }) {
         await alertAction.click();
         expect(await indices.isOnListing()).to.be(true);
 
-        await PageObjects.monitoring.clickBreadcrumb('breadcrumbClusters');
+        await PageObjects.monitoring.clickBreadcrumb('~breadcrumbClusters');
       });
 
       it('with alert on listing table page', async () => {
@@ -194,7 +194,7 @@ export default function ({ getService, getPageObjects }) {
         await alertAction.click();
         expect(await indices.isOnListing()).to.be(true);
 
-        await PageObjects.monitoring.clickBreadcrumb('breadcrumbClusters');
+        await PageObjects.monitoring.clickBreadcrumb('~breadcrumbClusters');
       });
     });
 

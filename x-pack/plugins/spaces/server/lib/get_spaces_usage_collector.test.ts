@@ -5,12 +5,24 @@
  */
 
 import { getSpacesUsageCollector, UsageStats } from './get_spaces_usage_collector';
+import * as Rx from 'rxjs';
+import { PluginsSetup } from '../plugin';
+import { Feature } from '../../../features/server';
+import { ILicense, LicensingPluginSetup } from '../../../licensing/server';
 
-function getServerMock(customization?: any) {
+interface SetupOpts {
+  license?: Partial<ILicense>;
+  features?: Feature[];
+}
+
+function setup({
+  license = { isAvailable: true },
+  features = [{ id: 'feature1' } as Feature, { id: 'feature2' } as Feature],
+}: SetupOpts = {}) {
   class MockUsageCollector {
     private fetch: any;
 
-    constructor(server: any, { fetch }: any) {
+    constructor({ fetch }: any) {
       this.fetch = fetch;
     }
     // to make typescript happy
@@ -19,49 +31,23 @@ function getServerMock(customization?: any) {
     }
   }
 
-  const getLicenseCheckResults = jest.fn().mockReturnValue({});
-  const defaultServerMock = {
-    plugins: {
-      security: {
-        isAuthenticated: jest.fn().mockReturnValue(true),
-      },
-      xpack_main: {
-        info: {
-          isAvailable: jest.fn().mockReturnValue(true),
-          feature: () => ({
-            getLicenseCheckResults,
-          }),
-          license: {
-            isOneOf: jest.fn().mockReturnValue(false),
-            getType: jest.fn().mockReturnValue('platinum'),
-          },
-          toJSON: () => ({ b: 1 }),
-        },
-        getFeatures: jest.fn().mockReturnValue([{ id: 'feature1' }, { id: 'feature2' }]),
-      },
-    },
-    expose: () => {
-      return;
-    },
-    log: () => {
-      return;
-    },
-    config: () => ({
-      get: (key: string) => {
-        if (key === 'xpack.spaces.enabled') {
-          return true;
-        }
-      },
-    }),
+  const licensing = {
+    license$: Rx.of(license),
+  } as LicensingPluginSetup;
+
+  const featuresSetup = ({
+    getFeatures: jest.fn().mockReturnValue(features),
+  } as unknown) as PluginsSetup['features'];
+
+  return {
+    licensing,
+    features: featuresSetup,
     usage: {
       collectorSet: {
-        makeUsageCollector: (options: any) => {
-          return new MockUsageCollector(defaultServerMock, options);
-        },
+        makeUsageCollector: (options: any) => new MockUsageCollector(options),
       },
     },
   };
-  return Object.assign(defaultServerMock, customization);
 }
 
 const defaultCallClusterMock = jest.fn().mockResolvedValue({
@@ -82,29 +68,16 @@ const defaultCallClusterMock = jest.fn().mockResolvedValue({
   },
 });
 
-test('sets enabled to false when spaces is turned off', async () => {
-  const mockConfigGet = jest.fn(key => {
-    if (key === 'xpack.spaces.enabled') {
-      return false;
-    } else if (key.indexOf('xpack.spaces') >= 0) {
-      throw new Error('Unknown config key!');
-    }
-  });
-  const serverMock = getServerMock({ config: () => ({ get: mockConfigGet }) });
-  const { fetch: getSpacesUsage } = getSpacesUsageCollector(serverMock);
-  const usageStats: UsageStats = await getSpacesUsage(defaultCallClusterMock);
-  expect(usageStats.enabled).toBe(false);
-});
-
 describe('with a basic license', () => {
-  let serverWithBasicLicenseMock: any;
   let usageStats: UsageStats;
   beforeAll(async () => {
-    serverWithBasicLicenseMock = getServerMock();
-    serverWithBasicLicenseMock.plugins.xpack_main.info.license.getType = jest
-      .fn()
-      .mockReturnValue('basic');
-    const { fetch: getSpacesUsage } = getSpacesUsageCollector(serverWithBasicLicenseMock);
+    const { features, licensing, usage } = setup({ license: { isAvailable: true, type: 'basic' } });
+    const { fetch: getSpacesUsage } = getSpacesUsageCollector({
+      kibanaIndex: '.kibana',
+      usage,
+      features,
+      licensing,
+    });
     usageStats = await getSpacesUsage(defaultCallClusterMock);
   });
 
@@ -133,9 +106,13 @@ describe('with a basic license', () => {
 describe('with no license', () => {
   let usageStats: UsageStats;
   beforeAll(async () => {
-    const serverWithNoLicenseMock = getServerMock();
-    serverWithNoLicenseMock.plugins.xpack_main.info.isAvailable = jest.fn().mockReturnValue(false);
-    const { fetch: getSpacesUsage } = getSpacesUsageCollector(serverWithNoLicenseMock);
+    const { features, licensing, usage } = setup({ license: { isAvailable: false } });
+    const { fetch: getSpacesUsage } = getSpacesUsageCollector({
+      kibanaIndex: '.kibana',
+      usage,
+      features,
+      licensing,
+    });
     usageStats = await getSpacesUsage(defaultCallClusterMock);
   });
 
@@ -157,14 +134,17 @@ describe('with no license', () => {
 });
 
 describe('with platinum license', () => {
-  let serverWithPlatinumLicenseMock: any;
   let usageStats: UsageStats;
   beforeAll(async () => {
-    serverWithPlatinumLicenseMock = getServerMock();
-    serverWithPlatinumLicenseMock.plugins.xpack_main.info.license.getType = jest
-      .fn()
-      .mockReturnValue('platinum');
-    const { fetch: getSpacesUsage } = getSpacesUsageCollector(serverWithPlatinumLicenseMock);
+    const { features, licensing, usage } = setup({
+      license: { isAvailable: true, type: 'platinum' },
+    });
+    const { fetch: getSpacesUsage } = getSpacesUsageCollector({
+      kibanaIndex: '.kibana',
+      usage,
+      features,
+      licensing,
+    });
     usageStats = await getSpacesUsage(defaultCallClusterMock);
   });
 

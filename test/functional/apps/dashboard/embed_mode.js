@@ -21,16 +21,24 @@ import expect from '@kbn/expect';
 
 export default function ({ getService, getPageObjects }) {
   const retry = getService('retry');
+  const esArchiver = getService('esArchiver');
+  const kibanaServer = getService('kibanaServer');
   const PageObjects = getPageObjects(['dashboard', 'common']);
   const browser = getService('browser');
 
-  describe('embed mode', async () => {
+  describe('embed mode', () => {
     before(async () => {
+      await esArchiver.load('dashboard/current/kibana');
+      await kibanaServer.uiSettings.replace({
+        'defaultIndex': '0bf35f60-3dc9-11e8-8660-4d65aa086b3c',
+      });
+      await PageObjects.common.navigateToApp('dashboard');
+      await PageObjects.dashboard.preserveCrossAppState();
       await PageObjects.dashboard.loadSavedDashboard('few panels');
     });
 
     it('hides the chrome', async () => {
-      let isChromeVisible = await PageObjects.common.isChromeVisible();
+      const isChromeVisible = await PageObjects.common.isChromeVisible();
       expect(isChromeVisible).to.be(true);
 
       const currentUrl = await browser.getCurrentUrl();
@@ -40,8 +48,8 @@ export default function ({ getService, getPageObjects }) {
       await browser.get(newUrl.toString(), useTimeStamp);
 
       await retry.try(async () => {
-        isChromeVisible = await PageObjects.common.isChromeVisible();
-        expect(isChromeVisible).to.be(false);
+        const isChromeHidden = await PageObjects.common.isChromeHidden();
+        expect(isChromeHidden).to.be(true);
       });
     });
 

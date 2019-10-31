@@ -26,6 +26,12 @@ export interface FilterState {
   store: FilterStateStore;
 }
 
+type FilterFormatterFunction = (value: any) => string;
+export interface FilterValueFormatter {
+  convert: FilterFormatterFunction;
+  getConverterFor: (type: string) => FilterFormatterFunction;
+}
+
 export interface FilterMeta {
   // index and type are optional only because when you create a new filter, there are no defaults
   index?: string;
@@ -34,13 +40,14 @@ export interface FilterMeta {
   negate: boolean;
   alias: string | null;
   key?: string;
-  value?: string;
+  value?: string | ((formatter?: FilterValueFormatter) => string);
+  params?: any;
 }
 
 export interface Filter {
-  $state: FilterState;
+  $state?: FilterState;
   meta: FilterMeta;
-  query?: object;
+  query?: any;
 }
 
 export interface LatLon {
@@ -62,7 +69,7 @@ export function buildEmptyFilter(isPinned: boolean, index?: string): Filter {
 }
 
 export function isFilterPinned(filter: Filter) {
-  return filter.$state.store === FilterStateStore.GLOBAL_STATE;
+  return filter.$state && filter.$state.store === FilterStateStore.GLOBAL_STATE;
 }
 
 export function toggleFilterDisabled(filter: Filter) {

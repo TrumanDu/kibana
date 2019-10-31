@@ -32,10 +32,11 @@ import {
   EuiSwitch,
 } from '@elastic/eui';
 import { FieldFilter, Filter } from '@kbn/es-query';
+import { i18n } from '@kbn/i18n';
 import { FormattedMessage, InjectedIntl, injectI18n } from '@kbn/i18n/react';
 import { get } from 'lodash';
 import React, { Component } from 'react';
-import { Field, IndexPattern } from 'ui/index_patterns';
+import { Field, IndexPattern } from '../../../index_patterns';
 import { GenericComboBox, GenericComboBoxProps } from './generic_combo_box';
 import {
   buildCustomFilter,
@@ -74,7 +75,7 @@ interface State {
 }
 
 class FilterEditorUI extends Component<Props, State> {
-  public constructor(props: Props) {
+  constructor(props: Props) {
     super(props);
     this.state = {
       selectedIndexPattern: this.getIndexPatternFromFilter(),
@@ -92,7 +93,7 @@ class FilterEditorUI extends Component<Props, State> {
     return (
       <div>
         <EuiPopoverTitle>
-          <EuiFlexGroup alignItems="baseline">
+          <EuiFlexGroup alignItems="baseline" responsive={false}>
             <EuiFlexItem>
               <FormattedMessage
                 id="data.filter.filterEditor.editFilterPopupTitle"
@@ -154,7 +155,7 @@ class FilterEditorUI extends Component<Props, State> {
 
             <EuiSpacer size="m" />
 
-            <EuiFlexGroup direction="rowReverse" alignItems="center">
+            <EuiFlexGroup direction="rowReverse" alignItems="center" responsive={false}>
               <EuiFlexItem grow={false}>
                 <EuiButton
                   fill
@@ -189,7 +190,12 @@ class FilterEditorUI extends Component<Props, State> {
   }
 
   private renderIndexPatternInput() {
-    if (this.props.indexPatterns.length <= 1) {
+    if (
+      this.props.indexPatterns.length <= 1 &&
+      this.props.indexPatterns.find(
+        indexPattern => indexPattern === this.state.selectedIndexPattern
+      )
+    ) {
       return '';
     }
     const { selectedIndexPattern } = this.state;
@@ -224,11 +230,13 @@ class FilterEditorUI extends Component<Props, State> {
   private renderRegularEditor() {
     return (
       <div>
-        <EuiFlexGroup>
-          <EuiFlexItem style={{ maxWidth: '188px' }}>{this.renderFieldInput()}</EuiFlexItem>
-          <EuiFlexItem style={{ maxWidth: '188px' }}>{this.renderOperatorInput()}</EuiFlexItem>
+        <EuiFlexGroup responsive={false} gutterSize="s">
+          <EuiFlexItem grow={2}>{this.renderFieldInput()}</EuiFlexItem>
+          <EuiFlexItem grow={false} style={{ flexBasis: 160 }}>
+            {this.renderOperatorInput()}
+          </EuiFlexItem>
         </EuiFlexGroup>
-        <EuiSpacer size="m" />
+        <EuiSpacer size="s" />
         <div data-test-subj="filterParams">{this.renderParamsEditor()}</div>
       </div>
     );
@@ -249,7 +257,7 @@ class FilterEditorUI extends Component<Props, State> {
           isDisabled={!selectedIndexPattern}
           placeholder={this.props.intl.formatMessage({
             id: 'data.filter.filterEditor.fieldSelectPlaceholder',
-            defaultMessage: 'Select a field',
+            defaultMessage: 'Select a field first',
           })}
           options={fields}
           selectedOptions={selectedField ? [selectedField] : []}
@@ -275,10 +283,17 @@ class FilterEditorUI extends Component<Props, State> {
       >
         <OperatorComboBox
           isDisabled={!selectedField}
-          placeholder={this.props.intl.formatMessage({
-            id: 'data.filter.filterEditor.operatorSelectPlaceholder',
-            defaultMessage: 'Select an operator',
-          })}
+          placeholder={
+            selectedField
+              ? this.props.intl.formatMessage({
+                  id: 'data.filter.filterEditor.operatorSelectPlaceholderSelect',
+                  defaultMessage: 'Select',
+                })
+              : this.props.intl.formatMessage({
+                  id: 'data.filter.filterEditor.operatorSelectPlaceholderWaiting',
+                  defaultMessage: 'Waiting',
+                })
+          }
           options={operators}
           selectedOptions={selectedOperator ? [selectedOperator] : []}
           getLabel={({ message }) => message}
@@ -293,7 +308,11 @@ class FilterEditorUI extends Component<Props, State> {
 
   private renderCustomEditor() {
     return (
-      <EuiFormRow label="Value">
+      <EuiFormRow
+        label={i18n.translate('data.filter.filterEditor.queryDslLabel', {
+          defaultMessage: 'Elasticsearch Query DSL',
+        })}
+      >
         <EuiCodeEditor
           value={this.state.queryDsl}
           onChange={this.onQueryDslChange}
@@ -441,17 +460,28 @@ class FilterEditorUI extends Component<Props, State> {
       queryDsl,
     } = this.state;
 
-    const { store } = this.props.filter.$state;
+    const { $state } = this.props.filter;
+    if (!$state || !$state.store) {
+      return; // typescript validation
+    }
     const alias = useCustomLabel ? customLabel : null;
 
     if (isCustomEditorOpen) {
       const { index, disabled, negate } = this.props.filter.meta;
-      const newIndex = index || this.props.indexPatterns[0].id;
+      const newIndex = index || this.props.indexPatterns[0].id!;
       const body = JSON.parse(queryDsl);
-      const filter = buildCustomFilter(newIndex, body, disabled, negate, alias, store);
+      const filter = buildCustomFilter(newIndex, body, disabled, negate, alias, $state.store);
       this.props.onSubmit(filter);
     } else if (indexPattern && field && operator) {
-      const filter = buildFilter(indexPattern, field, operator, params, alias, store);
+      const filter = buildFilter(
+        indexPattern,
+        field,
+        operator,
+        this.props.filter.meta.disabled,
+        params,
+        alias,
+        $state.store
+      );
       this.props.onSubmit(filter);
     }
   };
